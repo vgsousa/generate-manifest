@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Application}}-deployment
+  namespace: {{.Namespace}}
+spec:
+  replicas: {{.Deployment.Replicas}}
+  selector:
+    matchLabels:
+      app: {{.Application}}-deployment
+  template:
+    metadata:
+      labels:
+        app: {{.Application}}-deployment
+    spec:
+      containers:
+      - name: {{.Application}}-deployment
+        image: {{.Registry}}/{{.Application}}-{{.Environment}}:latest
+        livenessProbe:
+          httpGet:
+            path: {{.Deployment.LivenessProbePath}}
+            port: 8080
+            httpHeaders:
+            - name: Custom-Header
+              value: Awesome
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: {{.Deployment.ReadinessProbePath}}
+            port: 8080
+            httpHeaders:
+            - name: Custom-Header
+              value: Awesome
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        ports:
+        - containerPort: {{.Deployment.Port}}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{.Application}}-{{.Environment}}
+              topologyKey: "kubernetes.io/hostname"

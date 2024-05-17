@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Application}}-service
+  namespace: {{.Namespace}}
+spec:
+  selector:
+    app: {{.Application}}
+  ports:
+    - protocol: TCP
+      port: {{.Deployment.Port}}
+      targetPort: 33449

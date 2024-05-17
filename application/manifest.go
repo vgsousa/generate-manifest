@@ -1,12 +1,15 @@
 package application
 
 import (
+	"bufio"
 	"encoding/json"
 	"generate-manifest/common"
-	domain "generate-manifest/domains"
+	domain "generate-manifest/domain"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 )
 
@@ -14,41 +17,68 @@ func GenerateManifest(w http.ResponseWriter, r *http.Request) {
 
 	common.ValidateRequestMethod(w, r, http.MethodPost)
 
-	var app domain.Project
-	if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
+	var params domain.Config
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
 		return
 	}
 
-	if err := domain.ValidateProject(app); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	params.Namespace = params.Namespace + "-" + params.Environment
+	params.Application = common.NormalizeString(params.Application)
+
+	// Ler o conteúdo do arquivo
+
+	ips := loadIPList()
+	if len(ips) > 0 {
+		params.IPs = ips
 	}
 
-	// Substitui os valores no template YAML
-	manifest := renderDocument(app)
+	manifest := renderDocument(params)
 
 	// Retorna o template YAML modificado
 	writeReturnManifest(w, manifest)
 }
 
-func renderDocument(app domain.Project) string {
+func loadIPList() string {
 
-	// Cria um mapa com os valores a serem substituídos no template
-	data := map[string]interface{}{
-		"ProjectName": common.NormalizeString(app.Name),
-		"Environment": app.Environment,
-		"Namespace":   app.Namespace + "-" + app.Environment,
-		"Port":        app.Port,
+	fileContent, err := os.Open("./config/IPList.txt")
+	if err != nil {
+		log.Fatal("Error parsing YAML template: ", err)
+		os.Exit(1)
 	}
 
-	document := renderYAML("./templates/namespace_v1.yaml", data)
+	fileScanner := bufio.NewScanner(fileContent)
+	fileScanner.Split(bufio.ScanLines)
+	var ips string
+	for fileScanner.Scan() {
+		ips += fileScanner.Text()
+	}
+	defer fileContent.Close()
+
+	return ips
+}
+
+func renderDocument(params domain.Config) string {
+
+	folderVersion := "./templates/v" + strconv.FormatFloat(params.ClusterVersion, 'f', 2, 64)
+	_, err := os.Stat(folderVersion)
+
+	if os.IsNotExist(err) {
+		log.Fatal("Cluster version not found", err)
+	}
+
+	document := renderYAML(folderVersion+"/namespace.yaml", params)
 	document += "\n---\n\n"
-	document += renderYAML("./templates/deployment_v1.yaml", data)
+	document += renderYAML(folderVersion+"/deployment.yaml", params)
 	document += "\n---\n\n"
-	document += renderYAML("./templates/service_v1.yaml", data)
+	document += renderYAML(folderVersion+"/service.yaml", params)
 	document += "\n---\n\n"
-	document += renderYAML("./templates/ingress_v1.yaml", data)
+	document += renderYAML(folderVersion+"/ingress.yaml", params)
+
+	if domain.IsHPAEmpty(params.HPA) {
+		document += "\n---\n\n"
+		document += renderYAML(folderVersion+"/hpa.yaml", params)
+	}
 
 	return document
 }

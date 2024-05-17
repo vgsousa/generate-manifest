@@ -38,24 +38,56 @@ docker run -p 8080:8080 generate-manifest
 
 
 # API
-## 'POST /create-deployment'
+## 'POST /generate'
 Este endpoint recebe uma requisição contendo os dados da aplicação em formato JSON. Os campos obrigatórios são:
 
-- project: Nome da aplicação.
-- team: Time responsável pela aplicação.
+- application: Nome da aplicação.
+- clusterVersion: Versão do Cluster.
 - environment: Ambiente da aplicação.
+- internalAccessOnly: Bloqueio de acesso por IP.
+- registry: Registry das imagens.
 - namespace: Namespace da aplicação.
+- replicas: Número de pods.
 - port: Porta principal da aplicação.
+- resources: Recursos requeridos e limitado.
+- livenessProbePath: URL do LivenessProbe.
+- readinessProbePath: URL do ReadinessProbe.
+- hpa: Configurações de mínimo, máximo e quais as métricas.
 
 Exemplo de requisição:
 
 ```json
 {
-    "project": "aplication-name",
-    "team": "DSCOVR",
+    "application": "Microservices api",
     "environment": "dev",
-    "namespace": "web",
-    "port": 80
+    "clusterVersion": 1.99,
+    "internalAccessOnly": true,
+    "registry": "registry.azurecr.io",
+    "namespace": "portal",
+    "deployment": {
+        "replicas": 1,
+        "port": 80,
+        "resources": {
+            "requests" :{
+                "memory": "350Mi",
+                "cpu": "250m"
+            },
+            "limits" :{
+                "memory": "1Gi",
+                "cpu": "512m"
+            }
+        },
+        "livenessProbePath": "/health-check",
+        "readinessProbePath": "/health-check"
+    },
+    "hpa" :{
+        "min": 2,
+        "max": 10,
+        "metrics": {
+            "cpu": 50,
+            "memory": 80
+        }
+    }
 }
 ```
 A resposta da API será um arquivo YAML contendo as configurações geradas para o Kubernetes.
